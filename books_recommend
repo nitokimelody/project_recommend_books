@@ -1,0 +1,139 @@
+pip install sentence-transformers
+!pip install gradio
+import pandas as pd
+from sentence_transformers import SentenceTransformer
+
+new_file_path = "/content/drive/MyDrive/AI project /project AI begginner/update_1000k books.csv"
+df1 = pd.read_csv(new_file_path)
+
+# Xử lý dữ liệu để loại bỏ dấu []
+df1["category_names"] = df1["category_names"].astype(str).apply(lambda x: x.strip("[]").replace("'", ""))
+df1["author_names"] = df1["author_names"].astype(str).apply(lambda x: x.strip("[]").replace("'", ""))
+
+summary = df1["description"].tolist()[:7000]
+list_title = df1["title"].tolist()[:7000]
+list_category_book = df1["category_names"].tolist()[:7000]
+list_author = df1["author_names"].tolist()[:7000]
+
+transform = SentenceTransformer('all-MiniLM-L6-v2')
+vector_summary = transform.encode(summary)
+
+userinput = str(input())
+quantity = int(input())# input quantity user want.
+
+look_for_title = dict()
+for title, description in zip(list_title, summarize):
+    look_for_title[description] = title
+
+look_for_category = dict()
+for description, category in zip(summarize, list_category_book):
+    look_for_category[description] = category
+
+look_for_author = dict()
+for description, author in zip(summarize, list_author):
+    look_for_author[description] = author
+
+def compare(userinput,vector_summary):
+  query = transform.encode(userinput)
+  similarities = transform.similarity(query,vector_summary)
+  return similarities.tolist()[0]
+
+def  complete(similarities,quantity):
+  #vector_summary = transform.encode(summarize)
+  #query = transform.encode(userinput)
+  value_in_similarities = similarities
+  max_50 = sorted(value_in_similarities, reverse=True)[:50]
+  list_result_description = []
+  list_result_title = []
+  list_result_category = []
+  list_result_author = []
+  temp = []
+
+  for i in max_50:
+    if float(i) >= 0.5:
+      result = value_in_similarities.index(i)
+      if result not in temp:
+        temp.append(result)
+
+  dem = quantity
+  max_20 = temp[:20]
+  for i in max_20:
+    result_title = look_for_title[summarize[i]]
+    result_category = look_for_category[summarize[i]]  
+    result_author = look_for_author[summarize[i]]
+
+    list_result_description.append(summarize[i])
+    list_result_title.append(result_title)
+    list_result_category.append(result_category)
+    list_result_author.append(result_author)
+    dem -= 1
+    if dem == 0:
+      break
+
+
+  #list_result_discription
+  #list_result_title
+  #return [[title, desc] for title, desc in zip(list_result_title, list_result_discription)]
+  return [[title, desc, cat, auth] for title, desc, cat, auth in zip(list_result_title, list_result_description, list_result_category, list_result_author)]
+
+import gradio as gr
+
+# Custom CSS để căn chỉnh bảng và thêm đường viền
+custom_css = """
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
+  td:nth-child(1) {  /* Cột tên sách */
+    width: 25%;  /* Chiếm 25% không gian */
+    white-space: normal; /* Cho phép xuống dòng */
+  }
+  td:nth-child(2) {  /* Cột thông tin về sách */
+    width: 75%;  /* Chiếm 75% không gian */
+    white-space: pre-line; /* Cho phép xuống dòng */
+    word-wrap: break-word; /* Ngắt dòng tự động */
+  }
+</style>
+"""
+
+# Tạo UI
+with gr.Blocks() as demo:
+    gr.Markdown("## 📚 Book Recommendation System")
+
+    user_input = gr.Textbox(label="Nhập mô tả sách của bạn")
+    quantity = gr.Number(label="Số lượng sách", value=5, precision=0)
+
+    output_html = gr.HTML(label="Kết quả gợi ý")
+
+    submit_button = gr.Button("Gợi ý sách")
+
+    def process_output(user_desc, num_books):
+        similarities = compare(user_desc, vector_summary)  # Gọi hàm compare
+        results = complete(similarities, int(num_books))  # Gọi hàm complete
+
+        # Tạo bảng HTML hiển thị kết quả
+        table_html = "<table><tr><th>Tên sách</th><th>Thông tin về sách</th></tr>"
+        for title, desc, cat, auth in results:
+            book_info = f"<b>Author:</b> {auth}<br><b>Category:</b> {cat}<br><b>Description:</b> {desc}"
+            table_html += f"<tr><td><b>{title}</b></td><td>{book_info}</td></tr>"
+        table_html += "</table>"
+
+        return custom_css + table_html
+
+    submit_button.click(
+        process_output,
+        inputs=[user_input, quantity],  # Truyền input từ UI vào hàm process_output
+        outputs=output_html
+    )
+
+demo.launch(debug=True)
