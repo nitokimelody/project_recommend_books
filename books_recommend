@@ -18,9 +18,6 @@ list_author = df1["author_names"].tolist()[:7000]
 transform = SentenceTransformer('all-MiniLM-L6-v2')
 vector_summary = transform.encode(summary)
 
-userinput = str(input())
-quantity = int(input())# input quantity user want.
-
 look_for_title = dict()
 for title, description in zip(list_title, summarize):
     look_for_title[description] = title
